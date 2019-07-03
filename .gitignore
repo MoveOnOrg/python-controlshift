@@ -1,0 +1,10 @@
+*.pyc
+build/
+dist/
+*.egg-info
+ve/
+venv/
+test.py
+*~
+\#*
+.\#*
