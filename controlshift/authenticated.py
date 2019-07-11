@@ -1,3 +1,4 @@
+import requests
 from requests_oauthlib import OAuth2Session
 from oauthlib.oauth2 import BackendApplicationClient
 
@@ -105,3 +106,15 @@ class AuthenticatedControlShift:
     def member_lookup(self, email):
         res = self.get('/api/v1/members/lookup', email=email)
         return res.json()
+
+    def petition(self, slug):
+        res = self.get('/api/v1/petitions/{}'.format(slug))
+        if res.status_code != 200:
+            return None
+        data = res.json()
+        if data and data.get('petition'):
+            unauthenticated = requests.get('{}/petitions/{}.json'.format(self.base_url, slug))
+            if unauthenticated.status_code == 200:
+                unauthenticated_data = unauthenticated.json()
+                data['petition']['id'] = unauthenticated_data['id']
+        return data
