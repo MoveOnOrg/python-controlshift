@@ -107,14 +107,23 @@ class AuthenticatedControlShift:
         res = self.get('/api/v1/members/lookup', email=email)
         return res.json()
 
-    def petition(self, slug):
-        res = self.get('/api/v1/petitions/{}'.format(slug))
-        if res.status_code != 200:
-            return None
-        data = res.json()
-        if data and data.get('petition'):
-            unauthenticated = requests.get('{}/petitions/{}.json'.format(self.base_url, slug))
-            if unauthenticated.status_code == 200:
-                unauthenticated_data = unauthenticated.json()
-                data['petition']['id'] = unauthenticated_data['id']
+    def petition(self, slug, authenticated=True):
+        """
+        returns data about a petition. We need to get a hybrid of info from
+        authenticated and unauthenticated sources (e.g. 'id' is only in unauthenticated)
+        Passing authenticated=False will just get the public one
+        -- useful to reduce ratelimited API calls
+        """
+        data = {'petition': {}}
+        unauthenticated = requests.get('{}/petitions/{}.json'.format(self.base_url, slug))
+        if unauthenticated.status_code == 200:
+            data['petition'].update(unauthenticated.json())
+
+        if authenticated:
+            res = self.get('/api/v1/petitions/{}'.format(slug))
+            if res.status_code != 200:
+                return {'error': 'request error', 'res': res}
+            authenticated_data = res.json()
+            if authenticated_data and authenticated_data.get('petition'):
+                data['petition'].update(authenticated_data['petition'])
         return data
