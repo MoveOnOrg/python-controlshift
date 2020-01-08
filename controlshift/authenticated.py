@@ -45,10 +45,10 @@ class AuthenticatedControlShift:
                  client_class=BackendApplicationClient,
                  **params):
         if settings:
-            for settings_key, attr in self.SETTINGS_MAP.items():
+            for settings_key, attr in list(self.SETTINGS_MAP.items()):
                 setattr(self, attr, getattr(settings, settings_key, None))
 
-        for attr in self.SETTINGS_MAP.values():
+        for attr in list(self.SETTINGS_MAP.values()):
             if attr in params:
                 setattr(self, attr, params.get(attr))
             elif not getattr(self, attr, None):
@@ -67,7 +67,7 @@ class AuthenticatedControlShift:
         if you have a place to save auth tokens in your application
         """
         if self.debug:
-            print('SAVING TOKEN', token)
+            print(('SAVING TOKEN', token))
 
     def _token_save_inner(self, token):
         self._token = token
