@@ -1,6 +1,6 @@
 import requests
 from requests_oauthlib import OAuth2Session
-from oauthlib.oauth2 import BackendApplicationClient
+from oauthlib.oauth2 import BackendApplicationClient, TokenExpiredError
 
 
 class AuthenticatedControlShiftError(Exception):
@@ -37,7 +37,6 @@ class AuthenticatedControlShift:
     }
 
     _session = None
-    _token = None
     client = None
 
     def __init__(self,
@@ -56,52 +55,34 @@ class AuthenticatedControlShift:
                     'AuthenticatedControlShift requires parameter {}'
                     .format(attr))
 
-        if 'token' in params:
-            self._token = params['token']
         self.client_class = client_class
         self.debug = params.get('debug', False)
 
-    def token_saver(self, token):
-        """
-        Override this method,
-        if you have a place to save auth tokens in your application
-        """
-        if self.debug:
-            print('SAVING TOKEN', token)
+    def create_session(self):
+        oauth_token_url = '{}/oauth/token'.format(self.base_url)
+        client = self.client_class(client_id=self.client_id)
+        oauth = OAuth2Session(client=client)
+        token = oauth.fetch_token(
+            token_url=oauth_token_url,
+            client_id=self.client_id,
+            client_secret=self.client_secret)
 
-    def _token_save_inner(self, token):
-        self._token = token
-        self.token_saver(token)
-
-    def session(self):
-        if not self._session:
-            def _save_token(token, inner=self):
-                inner._token_save_inner(token)
-            oauth_token_url = '{}/oauth/token'.format(self.base_url)
-            if not self._token:
-                client = self.client_class(client_id=self.client_id)
-                oauth = OAuth2Session(client=client)
-                token = oauth.fetch_token(
-                    token_url=oauth_token_url,
-                    client_id=self.client_id,
-                    client_secret=self.client_secret)
-                _save_token(token)
-
-            client = self.client_class(client_id=self.client_id,
-                                       token=self._token)
-            self._session = OAuth2Session(
-                self.client_id,
-                token=self._token,
-                client=client,
-                auto_refresh_url=oauth_token_url,
-                auto_refresh_kwargs={'client_id': self.client_id,
-                                     'client_secret': self.client_secret},
-                token_updater=_save_token)
-        return self._session
+        client = self.client_class(client_id=self.client_id,
+                                    token=token)
+        self._session = OAuth2Session(
+            self.client_id,
+            token=token,
+            client=client)
 
     def get(self, path, **params):
-        sess = self.session()
-        return sess.get('{}{}'.format(self.base_url, path), params=params)
+        if not self._session:
+            self.create_session()
+        try:
+            r = self._session.get('{}{}'.format(self.base_url, path), params=params)
+        except TokenExpiredError:
+            self.create_session()
+            r = self._session.get('{}{}'.format(self.base_url, path), params=params)
+        return r
 
     def member_lookup(self, email):
         res = self.get('/api/v1/members/lookup', email=email)
