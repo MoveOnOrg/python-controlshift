@@ -73,6 +73,8 @@ class AuthenticatedControlShift:
         return session
 
     def get(self, path, **params):
+        if not self._token:
+            self.refresh_token()
         session = self.create_session()
         try:
             r = session.get('{}{}'.format(self.base_url, path), params=params)
