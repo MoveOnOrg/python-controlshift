@@ -36,7 +36,7 @@ class AuthenticatedControlShift:
         'CONTROLSHIFT_BASEURL': 'base_url'
     }
 
-    _session = None
+    _token = None
     client = None
 
     def __init__(self,
@@ -58,30 +58,29 @@ class AuthenticatedControlShift:
         self.client_class = client_class
         self.debug = params.get('debug', False)
 
-    def create_session(self):
+    def refresh_token(self):
         oauth_token_url = '{}/oauth/token'.format(self.base_url)
         client = self.client_class(client_id=self.client_id)
         oauth = OAuth2Session(client=client)
-        token = oauth.fetch_token(
+        self._token = oauth.fetch_token(
             token_url=oauth_token_url,
             client_id=self.client_id,
             client_secret=self.client_secret)
 
-        client = self.client_class(client_id=self.client_id,
-                                    token=token)
-        self._session = OAuth2Session(
-            self.client_id,
-            token=token,
-            client=client)
+    def create_session(self):
+        client = self.client_class(client_id=self.client_id, token=self._token)
+        session = OAuth2Session(self.client_id, token=self._token, client=client)
+        return session
 
     def get(self, path, **params):
-        if not self._session:
-            self.create_session()
+        session = self.create_session()
         try:
-            r = self._session.get('{}{}'.format(self.base_url, path), params=params)
-        except TokenExpiredError:
-            self.create_session()
-            r = self._session.get('{}{}'.format(self.base_url, path), params=params)
+            r = session.get('{}{}'.format(self.base_url, path), params=params)
+        except (TokenExpiredError, ConnectionError) as e:
+            print(e)
+            self.refresh_token()
+            session = self.create_session()
+            r = session.get('{}{}'.format(self.base_url, path), params=params)
         return r
 
     def member_lookup(self, email):
