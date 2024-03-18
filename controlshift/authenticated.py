@@ -59,6 +59,7 @@ class AuthenticatedControlShift:
         self.debug = params.get('debug', False)
 
     def refresh_token(self):
+        print('CSL Auth: Refreshing token')
         oauth_token_url = '{}/oauth/token'.format(self.base_url)
         client = self.client_class(client_id=self.client_id)
         oauth = OAuth2Session(client=client)
@@ -68,6 +69,7 @@ class AuthenticatedControlShift:
             client_secret=self.client_secret)
 
     def create_session(self):
+        print('CSL Auth: Creating session')
         client = self.client_class(client_id=self.client_id, token=self._token)
         session = OAuth2Session(self.client_id, token=self._token, client=client)
         return session
@@ -77,8 +79,10 @@ class AuthenticatedControlShift:
             self.refresh_token()
         session = self.create_session()
         try:
+            print('CSL Auth: Fetching data')
             r = session.get('{}{}'.format(self.base_url, path), params=params)
         except (TokenExpiredError, ConnectionError) as e:
+            print('CSL Auth: Failed to fetch data using current session')
             print(e)
             self.refresh_token()
             session = self.create_session()
