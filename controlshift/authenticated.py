@@ -55,18 +55,33 @@ class AuthenticatedControlShift:
                     'AuthenticatedControlShift requires parameter {}'
                     .format(attr))
 
+        if 'token' in params:
+            self._token = params['token']
         self.client_class = client_class
         self.debug = params.get('debug', False)
+
+    def token_saver(self, token):
+        """
+        Override this method,
+        if you have a place to save auth tokens in your application
+        """
+        if self.debug:
+            print('SAVING TOKEN', token)
+
+    def _token_save_inner(self, token):
+        self._token = token
+        self.token_saver(token)
 
     def refresh_token(self):
         print('CSL Auth: Refreshing token')
         oauth_token_url = '{}/oauth/token'.format(self.base_url)
         client = self.client_class(client_id=self.client_id)
         oauth = OAuth2Session(client=client)
-        self._token = oauth.fetch_token(
+        token = oauth.fetch_token(
             token_url=oauth_token_url,
             client_id=self.client_id,
             client_secret=self.client_secret)
+        self._token_save_inner(token)
 
     def create_session(self):
         print('CSL Auth: Creating session')
