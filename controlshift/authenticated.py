@@ -1,6 +1,6 @@
 import requests
 from requests_oauthlib import OAuth2Session
-from oauthlib.oauth2 import BackendApplicationClient
+from oauthlib.oauth2 import BackendApplicationClient, TokenExpiredError
 
 
 class AuthenticatedControlShiftError(Exception):
@@ -36,7 +36,6 @@ class AuthenticatedControlShift:
         'CONTROLSHIFT_BASEURL': 'base_url'
     }
 
-    _session = None
     _token = None
     client = None
 
@@ -73,35 +72,37 @@ class AuthenticatedControlShift:
         self._token = token
         self.token_saver(token)
 
-    def session(self):
-        if not self._session:
-            def _save_token(token, inner=self):
-                inner._token_save_inner(token)
-            oauth_token_url = '{}/oauth/token'.format(self.base_url)
-            if not self._token:
-                client = self.client_class(client_id=self.client_id)
-                oauth = OAuth2Session(client=client)
-                token = oauth.fetch_token(
-                    token_url=oauth_token_url,
-                    client_id=self.client_id,
-                    client_secret=self.client_secret)
-                _save_token(token)
+    def refresh_token(self):
+        print('CSL Auth: Refreshing token')
+        oauth_token_url = '{}/oauth/token'.format(self.base_url)
+        client = self.client_class(client_id=self.client_id)
+        oauth = OAuth2Session(client=client)
+        token = oauth.fetch_token(
+            token_url=oauth_token_url,
+            client_id=self.client_id,
+            client_secret=self.client_secret)
+        self._token_save_inner(token)
 
-            client = self.client_class(client_id=self.client_id,
-                                       token=self._token)
-            self._session = OAuth2Session(
-                self.client_id,
-                token=self._token,
-                client=client,
-                auto_refresh_url=oauth_token_url,
-                auto_refresh_kwargs={'client_id': self.client_id,
-                                     'client_secret': self.client_secret},
-                token_updater=_save_token)
-        return self._session
+    def create_session(self):
+        print('CSL Auth: Creating session')
+        client = self.client_class(client_id=self.client_id, token=self._token)
+        session = OAuth2Session(self.client_id, token=self._token, client=client)
+        return session
 
     def get(self, path, **params):
-        sess = self.session()
-        return sess.get('{}{}'.format(self.base_url, path), params=params)
+        if not self._token:
+            self.refresh_token()
+        session = self.create_session()
+        try:
+            print('CSL Auth: Fetching data')
+            r = session.get('{}{}'.format(self.base_url, path), params=params)
+        except (TokenExpiredError, ConnectionError) as e:
+            print('CSL Auth: Failed to fetch data using current session')
+            print(e)
+            self.refresh_token()
+            session = self.create_session()
+            r = session.get('{}{}'.format(self.base_url, path), params=params)
+        return r
 
     def member_lookup(self, email):
         res = self.get('/api/v1/members/lookup', email=email)
